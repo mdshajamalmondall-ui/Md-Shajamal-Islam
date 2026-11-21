@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Nursing AI</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_ai_assistant">AI Assistant</string>
+    <string name="nav_study">Study</string>
+    <string name="nav_clinical_tools">Clinical Tools</string>
+    <string name="nav_profile">Profile</string>
+    <string name="search_placeholder_en">Ask anything about Nursing...</string>
+    <string name="search_placeholder_bn">নার্সিং সম্পর্কে যেকোনো প্রশ্ন লিখুন...</string>
+    <string name="ai_firebase_notice">AI features require Firebase. Currently showing clearly labeled sample and locally grounded clinical reference responses.</string>
+    <string name="clinical_safety_disclaimer">Educational reference only. Never replaces independent clinical verification, licensed clinicians, or institutional protocols.</string>
+</resources>

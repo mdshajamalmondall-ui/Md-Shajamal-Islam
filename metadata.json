@@ -1,0 +1,6 @@
+{
+  "name": "Nursing AI",
+  "description": "Smart Nursing Education and Clinical Assistant supporting bilingual Bengali and English clinical answers, care plans, drug database, procedures, clinical calculators, and study hub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
