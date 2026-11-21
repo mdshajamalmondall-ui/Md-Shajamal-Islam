@@ -1,10 +1,14 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,33 +19,48 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.WorkOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,102 +69,295 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.data.local.AppLanguage
 import com.example.data.local.ThemeMode
+import com.example.data.local.UserPreferences
 import com.example.data.local.UserRole
 import com.example.data.local.bi
-import com.example.data.local.db.KnowledgeSeedData
+import com.example.data.local.db.PersonalNoteEntity
+import com.example.data.local.db.SavedAnswerEntity
 import com.example.ui.components.ClinicalSafetyBanner
 import com.example.ui.components.FirebaseAiNoticeBanner
+import com.example.ui.theme.ClinicalGreen
 import com.example.ui.viewmodel.NursingViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: NursingViewModel,
+    onAskQuestionInSearch: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val lang = prefs.language
     val savedAnswers by viewModel.savedAnswers.collectAsStateWithLifecycle()
+    val personalNotes by viewModel.personalNotes.collectAsStateWithLifecycle()
     val studyItems by viewModel.studyItems.collectAsStateWithLifecycle()
     val drugs by viewModel.drugs.collectAsStateWithLifecycle()
-    val procedures by viewModel.procedures.collectAsStateWithLifecycle()
     val knowledgeDocs by viewModel.knowledgeDocs.collectAsStateWithLifecycle()
     val mcqs by viewModel.mcqs.collectAsStateWithLifecycle()
     val auditLogs by viewModel.auditLogs.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
+    var editingNote by remember { mutableStateOf<PersonalNoteEntity?>(null) }
+    var showNewNoteDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 760.dp)
-                    .padding(top = 12.dp)
-            ) {
-                Text(
-                    text = bi(lang, "Profile, Career & Admin", "প্রোফাইল, ক্যারিয়ার ও অ্যাডমিন"),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+    val context = LocalContext.current
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                Spacer(Modifier.height(8.dp))
-                PrimaryScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 16.dp) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(bi(lang, "Settings", "সেটিংস")) })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(bi(lang, "Offline & Saved", "অফলাইন ও সংরক্ষিত")) })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text(bi(lang, "Career & CV", "ক্যারিয়ার ও সিভি")) })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(bi(lang, "Admin Portal", "অ্যাডমিন প্যানেল")) })
+            }
+            viewModel.updateProfilePhoto(uri)
+        }
+    }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            if (selectedTab == 1) {
+                FloatingActionButton(
+                    onClick = { showNewNoteDialog = true },
+                    modifier = Modifier.testTag("add_personal_note_fab")
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = bi(lang, "Add Note", "নোট যোগ করুন"))
+                }
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 760.dp)
+                        .padding(top = 12.dp)
+                ) {
+                    StudentProfileBanner(
+                        prefs = prefs,
+                        lang = lang,
+                        onPickPhoto = {
+                            avatarPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PrimaryScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 16.dp) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = { Text(bi(lang, "Profile Info", "প্রোফাইল তথ্য")) },
+                            modifier = Modifier.testTag("profile_tab_info")
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text(bi(lang, "My Notes (${personalNotes.size})", "আমার নোট (${personalNotes.size})")) },
+                            modifier = Modifier.testTag("profile_tab_notes")
+                        )
+                        Tab(
+                            selected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
+                            text = { Text(bi(lang, "Saved Q&A (${savedAnswers.size})", "সেভ করা প্রশ্ন (${savedAnswers.size})")) },
+                            modifier = Modifier.testTag("profile_tab_saved")
+                        )
+                        Tab(
+                            selected = selectedTab == 3,
+                            onClick = { selectedTab = 3 },
+                            text = { Text(bi(lang, "Career & Admin", "ক্যারিয়ার ও অ্যাডমিন")) },
+                            modifier = Modifier.testTag("profile_tab_admin")
+                        )
+                    }
+                }
+            }
+
+            when (selectedTab) {
+                0 -> ProfileDetailsTab(prefs = prefs, viewModel = viewModel)
+                1 -> PersonalNotesTab(
+                    lang = lang,
+                    notes = personalNotes,
+                    onAddClick = { showNewNoteDialog = true },
+                    onEditClick = { editingNote = it },
+                    onDeleteClick = viewModel::deleteNote
+                )
+                2 -> SavedQuestionsTab(
+                    lang = lang,
+                    savedAnswers = savedAnswers,
+                    onReaskInSearch = onAskQuestionInSearch,
+                    onDeleteSaved = viewModel::deleteSavedAnswer
+                )
+                3 -> CareerAndAdminContainerTab(
+                    lang = lang,
+                    viewModel = viewModel,
+                    careerItems = studyItems.filter { it.itemType in listOf("CAREER", "EXAM", "SCHOLARSHIP") },
+                    docsCount = knowledgeDocs.size,
+                    drugsCount = drugs.size,
+                    mcqsCount = mcqs.size,
+                    auditLogs = auditLogs
+                )
+            }
+        }
+    }
+
+    if (showNewNoteDialog || editingNote != null) {
+        PersonalNoteEditorDialog(
+            lang = lang,
+            existing = editingNote,
+            onDismiss = {
+                showNewNoteDialog = false
+                editingNote = null
+            },
+            onSave = { title, content, tag ->
+                viewModel.addOrUpdateNote(
+                    id = editingNote?.id,
+                    title = title,
+                    content = content,
+                    tag = tag
+                )
+                showNewNoteDialog = false
+                editingNote = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun StudentProfileBanner(
+    prefs: UserPreferences,
+    lang: AppLanguage,
+    onPickPhoto: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(68.dp)
+                .clickable(onClick = onPickPhoto)
+                .testTag("profile_avatar_picker")
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (prefs.profilePhotoUri.isNotBlank()) {
+                    AsyncImage(
+                        model = prefs.profilePhotoUri,
+                        contentDescription = bi(lang, "Student profile picture", "ছাত্র/ছাত্রীর প্রোফাইল ছবি"),
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Default avatar",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(24.dp)
+                    .align(Alignment.BottomEnd)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = bi(lang, "Change photo", "ছবি পরিবর্তন করুন"),
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
         }
 
-        when (selectedTab) {
-            0 -> SettingsProfileTab(prefs = prefs, viewModel = viewModel)
-            1 -> OfflineAndSavedTab(
-                lang = lang,
-                savedAnswers = savedAnswers,
-                offlineDrugs = drugs.filter { it.isOfflineSaved },
-                offlineProcedures = procedures.filter { it.isOfflineSaved },
-                offlineStudy = studyItems.filter { it.isOfflineSaved },
-                onDeleteSaved = viewModel::deleteSavedAnswer
+        Spacer(Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = prefs.userName.ifBlank { "Nursing Student" },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            2 -> CareerAndCvTab(
-                lang = lang,
-                careerItems = studyItems.filter { it.itemType in listOf("CAREER", "EXAM", "SCHOLARSHIP") }
+            Text(
+                text = bi(lang, prefs.userRole.labelEn, prefs.userRole.labelBn) +
+                    if (prefs.studentBatch.isNotBlank()) " • ${prefs.studentBatch}" else "",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            3 -> AdminPortalTab(
-                lang = lang,
-                viewModel = viewModel,
-                docsCount = knowledgeDocs.size,
-                drugsCount = drugs.size,
-                mcqsCount = mcqs.size,
-                auditLogs = auditLogs
-            )
+            if (prefs.email.isNotBlank() || prefs.phoneNumber.isNotBlank()) {
+                Text(
+                    text = listOf(prefs.email, prefs.phoneNumber).filter { it.isNotBlank() }.joinToString(" • "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = bi(lang, "Tap photo to set Student Picture", "প্রোফাইল ছবি যোগ করতে ছবির ওপর ট্যাপ করুন"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SettingsProfileTab(
-    prefs: com.example.data.local.UserPreferences,
+private fun ProfileDetailsTab(
+    prefs: UserPreferences,
     viewModel: NursingViewModel
 ) {
     val lang = prefs.language
     var nameInput by remember(prefs.userName) { mutableStateOf(prefs.userName) }
+    var emailInput by remember(prefs.email) { mutableStateOf(prefs.email) }
+    var phoneInput by remember(prefs.phoneNumber) { mutableStateOf(prefs.phoneNumber) }
+    var institutionInput by remember(prefs.institution) { mutableStateOf(prefs.institution) }
+    var batchInput by remember(prefs.studentBatch) { mutableStateOf(prefs.studentBatch) }
+    var selectedRole by remember(prefs.userRole) { mutableStateOf(prefs.userRole) }
+    var savedToast by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxSize(),
@@ -159,26 +371,105 @@ private fun SettingsProfileTab(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(bi(lang, "Nursing Profile", "নার্সিং প্রোফাইল"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = bi(lang, "Student & Nurse Profile Information", "স্টুডেন্ট ও নার্স প্রোফাইল তথ্য"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                     OutlinedTextField(
                         value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text(bi(lang, "Display Name", "নাম")) },
+                        onValueChange = { nameInput = it; savedToast = false },
+                        label = { Text(bi(lang, "Full Name", "পুরো নাম")) },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().testTag("profile_name_input")
                     )
-                    Text(bi(lang, "Role", "পেশাগত ভূমিকা"), style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it; savedToast = false },
+                        label = { Text(bi(lang, "Gmail / Email Address", "জিমেইল / ইমেইল")) },
+                        placeholder = { Text("student@gmail.com") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_email_input")
+                    )
+                    OutlinedTextField(
+                        value = phoneInput,
+                        onValueChange = { phoneInput = it; savedToast = false },
+                        label = { Text(bi(lang, "Phone Number", "ফোন নম্বর")) },
+                        placeholder = { Text("+880 1XXX-XXXXXX") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_phone_input")
+                    )
+                    OutlinedTextField(
+                        value = institutionInput,
+                        onValueChange = { institutionInput = it; savedToast = false },
+                        label = { Text(bi(lang, "Nursing College / Hospital", "নার্সিং কলেজ / হাসপাতাল")) },
+                        leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_institution_input")
+                    )
+                    OutlinedTextField(
+                        value = batchInput,
+                        onValueChange = { batchInput = it; savedToast = false },
+                        label = { Text(bi(lang, "Student Batch / Program / Year", "ব্যাচ / কোর্স / বর্ষ")) },
+                        placeholder = { Text("B.Sc. in Nursing — 3rd Year") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_batch_input")
+                    )
+
+                    Text(bi(lang, "Role", "পেশাগত পরিচয়"), style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         UserRole.entries.forEach { role ->
                             FilterChip(
-                                selected = prefs.userRole == role,
-                                onClick = { viewModel.updateUserProfile(nameInput, role) },
+                                selected = selectedRole == role,
+                                onClick = { selectedRole = role; savedToast = false },
                                 label = { Text(bi(lang, role.labelEn, role.labelBn)) }
                             )
                         }
                     }
-                    Button(onClick = { viewModel.updateUserProfile(nameInput, prefs.userRole) }) {
-                        Text(bi(lang, "Save Profile", "প্রোফাইল সংরক্ষণ করুন"))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.updateUserProfile(
+                                    name = nameInput,
+                                    email = emailInput,
+                                    phone = phoneInput,
+                                    institution = institutionInput,
+                                    studentBatch = batchInput,
+                                    role = selectedRole
+                                )
+                                savedToast = true
+                            },
+                            modifier = Modifier.weight(1f).testTag("save_profile_button")
+                        ) {
+                            Text(bi(lang, "Save Profile", "প্রোফাইল সংরক্ষণ করুন"))
+                        }
+                        if (prefs.profilePhotoUri.isNotBlank()) {
+                            OutlinedButton(onClick = { viewModel.updateProfilePhoto(null) }) {
+                                Text(bi(lang, "Clear Photo", "ছবি সরান"))
+                            }
+                        }
+                    }
+
+                    if (savedToast) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = ClinicalGreen, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = bi(lang, "Profile saved!", "প্রোফাইল তথ্য সংরক্ষিত হয়েছে!"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ClinicalGreen
+                            )
+                        }
                     }
                 }
             }
@@ -191,7 +482,7 @@ private fun SettingsProfileTab(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(bi(lang, "Language & Appearance", "ভাষা ও থিম"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(bi(lang, "Language & Theme", "ভাষা ও থিম"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AppLanguage.entries.forEach { l ->
                             FilterChip(
@@ -221,15 +512,181 @@ private fun SettingsProfileTab(
 }
 
 @Composable
-private fun OfflineAndSavedTab(
+private fun PersonalNotesTab(
     lang: AppLanguage,
-    savedAnswers: List<com.example.data.local.db.SavedAnswerEntity>,
-    offlineDrugs: List<com.example.data.local.db.DrugEntity>,
-    offlineProcedures: List<com.example.data.local.db.ProcedureEntity>,
-    offlineStudy: List<com.example.data.local.db.StudyItemEntity>,
+    notes: List<PersonalNoteEntity>,
+    onAddClick: () -> Unit,
+    onEditClick: (PersonalNoteEntity) -> Unit,
+    onDeleteClick: (String) -> Unit
+) {
+    val clipboard = LocalClipboardManager.current
+    var search by remember { mutableStateOf("") }
+    val filtered = remember(notes, search) {
+        notes.filter {
+            search.isBlank() || it.title.contains(search, true) || it.content.contains(search, true) || it.tag.contains(search, true)
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text(bi(lang, "Search your notes...", "আপনার নোট খুঁজুন...")) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(onClick = onAddClick, modifier = Modifier.testTag("new_note_button")) {
+                    Icon(Icons.Default.NoteAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(bi(lang, "New", "নতুন"))
+                }
+            }
+        }
+
+        if (filtered.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.NoteAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                        Text(bi(lang, "No personal nursing notes yet", "এখনো কোনো ব্যক্তিগত নোট নেই"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            bi(lang, "Jot down lecture highlights, clinical pearls, drug doses, or viva questions here.", "ক্লাসের নোট, ক্লিনিক্যাল তথ্য বা ভাইভা প্রশ্ন লিখে সংরক্ষণ করুন।"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(filtered, key = { it.id }) { note ->
+                val dateStr = remember(note.updatedAt) {
+                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(note.updatedAt))
+                }
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(8.dp)) {
+                                Text(note.tag, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { clipboard.setText(AnnotatedString("${note.title}\n\n${note.content}")) }, modifier = Modifier.minimumInteractiveComponentSize()) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy note")
+                            }
+                            IconButton(onClick = { onEditClick(note) }, modifier = Modifier.minimumInteractiveComponentSize()) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit note")
+                            }
+                            IconButton(onClick = { onDeleteClick(note.id) }, modifier = Modifier.minimumInteractiveComponentSize()) {
+                                Icon(Icons.Default.DeleteOutline, contentDescription = "Delete note", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        Text(note.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(note.content, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PersonalNoteEditorDialog(
+    lang: AppLanguage,
+    existing: PersonalNoteEntity?,
+    onDismiss: () -> Unit,
+    onSave: (title: String, content: String, tag: String) -> Unit
+) {
+    var title by remember { mutableStateOf(existing?.title.orEmpty()) }
+    var content by remember { mutableStateOf(existing?.content.orEmpty()) }
+    var tag by remember { mutableStateOf(existing?.tag ?: "Lecture Note") }
+    val tags = listOf("Lecture Note", "Clinical Pearl", "Exam Prep", "Drug Note", "Viva Q&A")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (existing == null) bi(lang, "Add Nursing Note", "নতুন নোট যোগ করুন")
+                else bi(lang, "Edit Note", "নোট সম্পাদনা করুন")
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(bi(lang, "Note Title", "নোটের শিরোনাম")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("note_title_input")
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tags.forEach { t ->
+                        FilterChip(selected = tag == t, onClick = { tag = t }, label = { Text(t) })
+                    }
+                }
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    label = { Text(bi(lang, "Write your note...", "বিস্তারিত লিখুন...")) },
+                    minLines = 4,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth().testTag("note_content_input")
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(title, content, tag) },
+                enabled = title.isNotBlank() || content.isNotBlank(),
+                modifier = Modifier.testTag("save_note_dialog_button")
+            ) {
+                Text(bi(lang, "Save", "সংরক্ষণ"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(bi(lang, "Cancel", "বাতিল"))
+            }
+        }
+    )
+}
+
+@Composable
+private fun SavedQuestionsTab(
+    lang: AppLanguage,
+    savedAnswers: List<SavedAnswerEntity>,
+    onReaskInSearch: (String) -> Unit,
     onDeleteSaved: (String) -> Unit
 ) {
-    var offlineSearch by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var search by remember { mutableStateOf("") }
+    var expandedId by remember { mutableStateOf<String?>(null) }
+
+    val filtered = remember(savedAnswers, search) {
+        savedAnswers.filter {
+            search.isBlank() || it.question.contains(search, true) || it.answerSummary.contains(search, true)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxSize(),
@@ -238,320 +695,82 @@ private fun OfflineAndSavedTab(
     ) {
         item {
             OutlinedTextField(
-                value = offlineSearch,
-                onValueChange = { offlineSearch = it },
+                value = search,
+                onValueChange = { search = it },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                placeholder = { Text(bi(lang, "Search offline downloaded content...", "অফলাইনে সংরক্ষিত কন্টেন্ট খুঁজুন...")) },
+                placeholder = { Text(bi(lang, "Search saved questions...", "সংরক্ষিত প্রশ্ন খুঁজুন...")) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = bi(
-                        lang,
-                        "Offline Ready: ${offlineDrugs.size} drugs, ${offlineProcedures.size} procedures, ${offlineStudy.size} notes, ${savedAnswers.size} saved answers",
-                        "অফলাইন প্রস্তুত: ${offlineDrugs.size}টি ওষুধ, ${offlineProcedures.size}টি প্রসিডিউর, ${offlineStudy.size}টি নোট"
-                    ),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
         }
 
-        if (savedAnswers.isNotEmpty()) {
-            item { Text(bi(lang, "Saved AI Answers", "সংরক্ষিত AI উত্তর"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            items(savedAnswers.filter { offlineSearch.isBlank() || it.question.contains(offlineSearch, true) || it.answerSummary.contains(offlineSearch, true) }, key = { it.id }) { ans ->
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(ans.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text(ans.answerSummary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(4.dp))
-                            Text(ans.fullFormattedContent.take(260), style = MaterialTheme.typography.bodySmall)
-                        }
-                        IconButton(onClick = { onDeleteSaved(ans.id) }) {
-                            Icon(Icons.Default.DeleteOutline, contentDescription = "Delete saved answer")
-                        }
-                    }
-                }
-            }
-        }
-
-        val matchedDrugs = offlineDrugs.filter { offlineSearch.isNotBlank() && (it.genericName.contains(offlineSearch, true) || it.brandNames.contains(offlineSearch, true)) }
-        if (matchedDrugs.isNotEmpty()) {
-            item { Text(bi(lang, "Offline Drugs Matched", "অফলাইন ওষুধ"), style = MaterialTheme.typography.titleSmall) }
-            items(matchedDrugs, key = { it.id }) { d ->
-                Card(shape = RoundedCornerShape(12.dp)) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                        Text(d.genericName, style = MaterialTheme.typography.titleSmall)
-                        Text(d.dosageReference, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CareerAndCvTab(
-    lang: AppLanguage,
-    careerItems: List<com.example.data.local.db.StudyItemEntity>
-) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    var fullName by remember { mutableStateOf("Amina Khatun, BSN, RN") }
-    var licenseNo by remember { mutableStateOf("BNMC Reg # (Verify Official Record)") }
-    var experience by remember { mutableStateOf("2 Years Staff Nurse — Medical-Surgical & Emergency Ward") }
-    var skills by remember { mutableStateOf("IV Cannulation, BLS/CPR, Medication Safety (10 Rights), EHR Documentation, Bilingual Patient Education (EN/BN)") }
-    var generatedCv by remember { mutableStateOf("") }
-
-    LazyColumn(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(careerItems, key = { it.id }) { item ->
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.WorkOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
-                        Text(bi(lang, item.titleEn, item.titleBn), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    }
-                    Text(bi(lang, item.bodyEn, item.bodyBn), style = MaterialTheme.typography.bodySmall)
-                    Text("${item.sourceTitle} • Updated ${item.updatedDate}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        }
-
-        item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(bi(lang, "Nursing CV & Resume Builder", "নার্সিং সিভি (CV) বিল্ডার"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(fullName, { fullName = it }, label = { Text("Full Name & Credentials") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(licenseNo, { licenseNo = it }, label = { Text("Nursing Council / License Reference") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(experience, { experience = it }, label = { Text("Clinical Experience") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(skills, { skills = it }, label = { Text("Core Nursing Competencies") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                    Button(
-                        onClick = {
-                            generatedCv = """
-                                $fullName
-                                License: $licenseNo
-                                
-                                PROFESSIONAL SUMMARY
-                                Dedicated nursing professional committed to evidence-based patient care, clinical safety, and compassionate education.
-                                
-                                CLINICAL EXPERIENCE
-                                • $experience
-                                
-                                CORE NURSING COMPETENCIES
-                                • $skills
-                            """.trimIndent()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(bi(lang, "Generate Nursing CV Preview", "নার্সিং সিভি তৈরি করুন"))
-                    }
-                    if (generatedCv.isNotBlank()) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                            Text(generatedCv, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { clipboard.setText(AnnotatedString(generatedCv)) }) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Copy CV")
-                            }
-                            OutlinedButton(onClick = {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, generatedCv)
-                                }
-                                context.startActivity(Intent.createChooser(intent, "Share Nursing CV"))
-                            }) {
-                                Icon(Icons.Default.Share, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Share")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AdminPortalTab(
-    lang: AppLanguage,
-    viewModel: NursingViewModel,
-    docsCount: Int,
-    drugsCount: Int,
-    mcqsCount: Int,
-    auditLogs: List<com.example.data.local.db.AuditLogEntity>
-) {
-    var pinInput by remember { mutableStateOf("") }
-    var unlocked by remember { mutableStateOf(false) }
-
-    var topicTitle by remember { mutableStateOf("") }
-    var topicSubject by remember { mutableStateOf(KnowledgeSeedData.subjects.first()) }
-    var topicDef by remember { mutableStateOf("") }
-    var topicNursing by remember { mutableStateOf("") }
-    var topicSource by remember { mutableStateOf("") }
-
-    var drugName by remember { mutableStateOf("") }
-    var drugBrands by remember { mutableStateOf("") }
-    var drugClass by remember { mutableStateOf("") }
-    var drugDose by remember { mutableStateOf("") }
-    var drugNursing by remember { mutableStateOf("") }
-
-    var reportTitle by remember { mutableStateOf("") }
-    var reportNotes by remember { mutableStateOf("") }
-
-    LazyColumn(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (!unlocked) {
+        if (filtered.isEmpty()) {
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(8.dp))
-                            Text(bi(lang, "Secure Clinical Admin Dashboard", "সুরক্ষিত অ্যাডমিন ড্যাশবোর্ড"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        }
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                        Text(bi(lang, "No saved questions yet", "এখনো কোনো প্রশ্ন সেভ করা হয়নি"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            text = bi(lang, "Enter Reviewer PIN (demo PIN: 2026) to manage topics, drugs, MCQs, verification & audit logs.", "কন্টেন্ট রিভিউ ও ম্যানেজমেন্টের জন্য অ্যাডমিন পিন দিন (ডেমো পিন: 2026)।"),
-                            style = MaterialTheme.typography.bodySmall
+                            bi(lang, "Tap the bookmark icon on any answer in Search to save your favorite questions here.", "সার্চ করার পর যেকোনো উত্তরের বুকমার্ক আইকনে চাপ দিয়ে এখানে সংরক্ষণ করুন।"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedTextField(
-                            value = pinInput,
-                            onValueChange = { pinInput = it },
-                            label = { Text("Admin PIN") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().testTag("admin_pin_input")
-                        )
-                        Button(
-                            onClick = { if (pinInput.trim() == "2026") unlocked = true },
-                            modifier = Modifier.testTag("unlock_admin_button")
-                        ) {
-                            Text(bi(lang, "Unlock Admin Portal", "অ্যাডমিন পোর্টাল খুলুন"))
-                        }
                     }
                 }
             }
         } else {
-            item {
-                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        StatBadge("KB Topics", "$docsCount")
-                        StatBadge("Drugs", "$drugsCount")
-                        StatBadge("MCQs", "$mcqsCount")
-                        StatBadge("Audit Logs", "${auditLogs.size}")
-                    }
-                }
-            }
-
-            item {
-                Card(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Add Verified Knowledge Source (v1)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        OutlinedTextField(topicTitle, { topicTitle = it }, label = { Text("Topic Title") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(topicSubject, { topicSubject = it }, label = { Text("Nursing Subject") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(topicDef, { topicDef = it }, label = { Text("Clinical Definition") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(topicNursing, { topicNursing = it }, label = { Text("Nursing Management") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(topicSource, { topicSource = it }, label = { Text("Reference / Guideline Source") }, modifier = Modifier.fillMaxWidth())
-                        Button(
-                            onClick = {
-                                if (topicTitle.isNotBlank() && topicDef.isNotBlank()) {
-                                    viewModel.adminSaveKnowledgeTopic(topicTitle, topicTitle, topicSubject, topicDef, topicNursing, topicSource, "Verified")
-                                    topicTitle = ""; topicDef = ""; topicNursing = ""; topicSource = ""
+            items(filtered, key = { it.id }) { ans ->
+                val expanded = expandedId == ans.id
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth().clickable { expandedId = if (expanded) null else ans.id }
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(ans.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(ans.answerSummary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = if (expanded) ans.fullFormattedContent else ans.fullFormattedContent.take(220) + if (ans.fullFormattedContent.length > 220) "..." else "",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { onReaskInSearch(ans.question) }) {
+                                Text(bi(lang, "Open in Search", "সার্চে খুলুন"))
+                            }
+                            Row {
+                                IconButton(onClick = { clipboard.setText(AnnotatedString("${ans.question}\n\n${ans.fullFormattedContent}")) }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Publish & Log Version") }
-                    }
-                }
-            }
-
-            item {
-                Card(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Add Verified Drug Monograph", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        OutlinedTextField(drugName, { drugName = it }, label = { Text("Generic Name") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(drugBrands, { drugBrands = it }, label = { Text("Brand Names") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(drugClass, { drugClass = it }, label = { Text("Classification") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(drugDose, { drugDose = it }, label = { Text("Dosage Reference") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(drugNursing, { drugNursing = it }, label = { Text("Nursing Responsibilities") }, modifier = Modifier.fillMaxWidth())
-                        Button(
-                            onClick = {
-                                if (drugName.isNotBlank()) {
-                                    viewModel.adminSaveDrug(drugName, drugBrands, drugClass, drugDose, drugNursing)
-                                    drugName = ""; drugBrands = ""; drugClass = ""; drugDose = ""; drugNursing = ""
+                                IconButton(onClick = {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, "${ans.question}\n\n${ans.fullFormattedContent}")
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Share Saved Question"))
+                                }) {
+                                    Icon(Icons.Default.Share, contentDescription = "Share")
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Save Drug to Formulary") }
-                    }
-                }
-            }
-
-            item {
-                Card(shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Submit Clinical QA Report / Feedback", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        OutlinedTextField(reportTitle, { reportTitle = it }, label = { Text("Topic / Screen") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(reportNotes, { reportNotes = it }, label = { Text("Clinical Review Note") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedButton(
-                            onClick = {
-                                if (reportTitle.isNotBlank()) {
-                                    viewModel.submitClinicalFeedback(reportTitle, reportNotes)
-                                    reportTitle = ""; reportNotes = ""
+                                IconButton(onClick = { onDeleteSaved(ans.id) }) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Log Review Feedback") }
-                    }
-                }
-            }
-
-            item { Text("Reviewer Audit Logs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            items(auditLogs, key = { it.id }) { log ->
-                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(10.dp)) {
-                        Text("${log.action} • ${log.entityType}: ${log.entityTitle}", style = MaterialTheme.typography.labelLarge)
-                        Text("${log.actorRole} — ${log.notes}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StatBadge(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }

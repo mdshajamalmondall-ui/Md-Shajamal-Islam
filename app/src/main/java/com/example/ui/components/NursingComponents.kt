@@ -84,33 +84,49 @@ import com.example.ui.viewmodel.NursingViewModel
 @Composable
 fun FirebaseAiNoticeBanner(
     language: AppLanguage,
+    isLiveAi: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = ClinicalAmberContainer.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, ClinicalAmber.copy(alpha = 0.35f))
+        color = if (isLiveAi) {
+            ClinicalGreenContainer.copy(alpha = 0.55f)
+        } else {
+            ClinicalAmberContainer.copy(alpha = 0.72f)
+        },
+        border = BorderStroke(
+            1.dp,
+            if (isLiveAi) ClinicalGreen.copy(alpha = 0.35f) else ClinicalAmber.copy(alpha = 0.35f)
+        )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "AI Notice",
-                tint = OnClinicalAmberContainer,
+                imageVector = if (isLiveAi) Icons.Default.CheckCircle else Icons.Default.Info,
+                contentDescription = "AI Mode",
+                tint = if (isLiveAi) ClinicalGreen else OnClinicalAmberContainer,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = bi(
-                    language,
-                    "AI features require Firebase. Showing clearly labeled sample & locally grounded clinical references.",
-                    "লাইভ AI-এর জন্য Firebase প্রয়োজন। বর্তমানে যাচাইকৃত স্থানীয় রেফারেন্স ও নমুনা উত্তর দেখানো হচ্ছে।"
-                ),
+                text = if (isLiveAi) {
+                    bi(
+                        language,
+                        "Live Gemini AI Active — Ask any disease, drug, management, indication, or nursing question in English or বাংলা.",
+                        "লাইভ Gemini AI সক্রিয় — যেকোনো রোগ, ওষুধ, ম্যানেজমেন্ট, ইন্ডিকেশন বা নার্সিং প্রশ্ন বাংলা বা ইংরেজিতে করুন।"
+                    )
+                } else {
+                    bi(
+                        language,
+                        "Offline Grounded Reference Mode — Connect to internet for live open-ended Gemini AI responses.",
+                        "অফলাইন রেফারেন্স মোড — লাইভ Gemini AI উত্তরের জন্য ইন্টারনেট সংযোগ চালু করুন।"
+                    )
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = OnClinicalAmberContainer
+                color = if (isLiveAi) OnClinicalGreenContainer else OnClinicalAmberContainer
             )
         }
     }
@@ -163,22 +179,23 @@ fun NursingSearchComposer(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val canSend = !isLoading && (query.isNotBlank() || attachedImageUri != null)
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp,
-        shadowElevation = 6.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             if (attachedImageUri != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surface)
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -186,7 +203,7 @@ fun NursingSearchComposer(
                         model = attachedImageUri,
                         contentDescription = "Attached nursing study image",
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
                             .clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop
                     )
@@ -205,83 +222,78 @@ fun NursingSearchComposer(
                 }
             }
 
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = {
-                    Text(
-                        text = bi(language, "Ask anything about Nursing...", "নার্সিং সম্পর্কে যেকোনো প্রশ্ন লিখুন..."),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("universal_nursing_search_input"),
-                maxLines = 4,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (!isLoading) onSend() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.surface,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.surface
-                )
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(
-                        onClick = onImagePickClick,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .testTag("image_search_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Image,
-                            contentDescription = bi(language, "Upload nursing book or note image", "বই বা নোটের ছবি আপলোড করুন"),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(
-                        onClick = onVoiceClick,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .testTag("voice_search_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = bi(language, "Voice search", "কথা বলে প্রশ্ন করুন"),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                IconButton(
+                    onClick = onImagePickClick,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("image_search_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = bi(language, "Attach study image", "ছবি সংযুক্ত করুন"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    placeholder = {
+                        Text(
+                            text = bi(language, "Ask anything about Nursing...", "নার্সিং সম্পর্কে যেকোনো প্রশ্ন লিখুন..."),
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("universal_nursing_search_input"),
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                )
+
+                IconButton(
+                    onClick = onVoiceClick,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("voice_search_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = bi(language, "Voice search", "কথা বলে প্রশ্ন করুন"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(Modifier.width(4.dp))
 
                 Surface(
                     shape = CircleShape,
-                    color = if (query.isNotBlank() || attachedImageUri != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
+                    color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .clickable(enabled = !isLoading && (query.isNotBlank() || attachedImageUri != null)) {
-                            onSend()
-                        }
+                        .clickable(enabled = canSend) { onSend() }
                         .testTag("send_search_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = bi(language, "Send question", "প্রশ্ন পাঠান"),
-                            tint = if (query.isNotBlank() || attachedImageUri != null) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                            tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -330,13 +342,17 @@ fun StructuredAiMessageCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = if (!message.isSampleNoticeShown) ClinicalGreenContainer else MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = bi(language, "NURSING AI • SAMPLE GROUNDED ANSWER", "নার্সিং AI • নমুনা ও যাচাইকৃত উত্তর"),
+                        text = if (!message.isSampleNoticeShown) {
+                            bi(language, "NURSING AI • LIVE GEMINI AI", "নার্সিং AI • লাইভ জেমিনি AI")
+                        } else {
+                            bi(language, "NURSING AI • OFFLINE REFERENCE", "নার্সিং AI • অফলাইন রেফারেন্স")
+                        },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = if (!message.isSampleNoticeShown) OnClinicalGreenContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -408,7 +424,9 @@ fun StructuredAiMessageCard(
                 }
             }
 
-            FirebaseAiNoticeBanner(language = language)
+            if (message.isSampleNoticeShown) {
+                FirebaseAiNoticeBanner(language = language, isLiveAi = false)
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

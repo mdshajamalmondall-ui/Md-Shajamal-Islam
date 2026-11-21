@@ -12,16 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Calculate
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -47,19 +45,17 @@ import androidx.navigation.compose.rememberNavController
 import com.example.data.local.AppLanguage
 import com.example.data.local.ThemeMode
 import com.example.data.local.bi
-import com.example.ui.screens.AiAssistantScreen
-import com.example.ui.screens.ClinicalToolsScreen
+import com.example.ui.screens.FilesScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ProfileScreen
-import com.example.ui.screens.StudyHubScreen
+import com.example.ui.screens.ToolsHubScreen
 import com.example.ui.theme.NursingAiTheme
 import com.example.ui.viewmodel.NursingViewModel
 
 object NursingRoutes {
     const val HOME = "home"
-    const val AI_ASSISTANT = "ai_assistant"
-    const val STUDY = "study"
-    const val CLINICAL_TOOLS = "clinical_tools"
+    const val TOOLS = "tools"
+    const val FILES = "files"
     const val PROFILE = "profile"
 }
 
@@ -74,6 +70,7 @@ private data class NavTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             val viewModel: NursingViewModel = viewModel()
@@ -100,10 +97,9 @@ fun NursingAiAppShell(
     val currentDestination = backStackEntry?.destination
 
     val tabs = listOf(
-        NavTab(NursingRoutes.HOME, "Home", "হোম", Icons.Filled.Home, Icons.Outlined.Home),
-        NavTab(NursingRoutes.AI_ASSISTANT, "AI Assistant", "AI সহায়ক", Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
-        NavTab(NursingRoutes.STUDY, "Study", "স্টাডি", Icons.Filled.School, Icons.Outlined.School),
-        NavTab(NursingRoutes.CLINICAL_TOOLS, "Tools", "টুলস", Icons.Filled.Calculate, Icons.Outlined.Calculate),
+        NavTab(NursingRoutes.HOME, "Search", "সার্চ", Icons.Filled.Search, Icons.Outlined.Search),
+        NavTab(NursingRoutes.TOOLS, "Tools", "টুলস", Icons.Filled.Build, Icons.Outlined.Build),
+        NavTab(NursingRoutes.FILES, "Files", "ফাইলস", Icons.Filled.Folder, Icons.Outlined.Folder),
         NavTab(NursingRoutes.PROFILE, "Profile", "প্রোফাইল", Icons.Filled.Person, Icons.Outlined.Person)
     )
 
@@ -183,13 +179,12 @@ fun NursingAiAppShell(
                     composable(NursingRoutes.HOME) {
                         HomeScreen(
                             viewModel = viewModel,
-                            onNavigateToClinicalTools = { navigateTab(NursingRoutes.CLINICAL_TOOLS) },
-                            onNavigateToStudy = { navigateTab(NursingRoutes.STUDY) },
-                            onNavigateToAiHub = { navigateTab(NursingRoutes.AI_ASSISTANT) }
+                            onNavigateToTools = { navigateTab(NursingRoutes.TOOLS) },
+                            onNavigateToFiles = { navigateTab(NursingRoutes.FILES) }
                         )
                     }
-                    composable(NursingRoutes.AI_ASSISTANT) {
-                        AiAssistantScreen(
+                    composable(NursingRoutes.TOOLS) {
+                        ToolsHubScreen(
                             viewModel = viewModel,
                             onAskInMainChat = { prompt ->
                                 viewModel.startNewChat()
@@ -198,14 +193,18 @@ fun NursingAiAppShell(
                             }
                         )
                     }
-                    composable(NursingRoutes.STUDY) {
-                        StudyHubScreen(viewModel = viewModel)
-                    }
-                    composable(NursingRoutes.CLINICAL_TOOLS) {
-                        ClinicalToolsScreen(viewModel = viewModel)
+                    composable(NursingRoutes.FILES) {
+                        FilesScreen(viewModel = viewModel)
                     }
                     composable(NursingRoutes.PROFILE) {
-                        ProfileScreen(viewModel = viewModel)
+                        ProfileScreen(
+                            viewModel = viewModel,
+                            onAskQuestionInSearch = { prompt ->
+                                viewModel.startNewChat()
+                                viewModel.sendChatQuery(prompt)
+                                navigateTab(NursingRoutes.HOME)
+                            }
+                        )
                     }
                 }
             }

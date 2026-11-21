@@ -153,3 +153,27 @@ interface AuditLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(log: AuditLogEntity)
 }
+
+@Dao
+interface PersonalNoteDao {
+    @Query("SELECT * FROM personal_notes ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<PersonalNoteEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(note: PersonalNoteEntity)
+
+    @Query("DELETE FROM personal_notes WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface UserFileDao {
+    @Query("SELECT * FROM user_files ORDER BY addedAt DESC")
+    fun observeAll(): Flow<List<UserFileEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(file: UserFileEntity)
+
+    @Query("DELETE FROM user_files WHERE id = :id")
+    suspend fun deleteById(id: String)
+}

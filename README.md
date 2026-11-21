@@ -8,44 +8,33 @@
 
 ## Key Features
 
-### 1. ChatGPT-Style Universal Nursing Search Homepage
-- Prominent *"Ask anything about Nursing..."* search and multi-turn conversation interface.
-- **Voice Search** (`RECORD_AUDIO` + Android `SpeechRecognizer` supporting English and Bengali).
-- **Image Search** via zero-permission Android Photo Picker (`PickVisualMedia`) for textbook pages and study notes.
-- Dynamically organized nursing answers (Definition, Introduction, Causes/Risk Factors, Signs & Symptoms, Pathophysiology, Assessment, Investigations, Medical Management, Nursing Management, Interventions & Rationales, Complications, Prevention, Patient Education, Important Nursing Notes, and Verified References).
-- **New Chat**, **Chat History**, **Recent Searches**, **Suggested Questions**, and **Save / Copy / Share** actions.
+### 1. Search — ChatGPT-Style Universal Nursing Search (Live Gemini AI)
+- Minimalist ChatGPT-style interface powered by **Firebase AI Logic (`gemini-3.8-flash`)** with Firebase App Check attestation, plus an **Offline Grounded Reference** fallback mode.
+- Answers **any nursing, medical, pharmacology, procedure, or clinical question** (definitions, management, complications, indications, contraindications, drugs, short or detailed) in **English & বাংলা**.
+- **Voice Search** (`RECORD_AUDIO` + Android `SpeechRecognizer` supporting `en-US` and `bn-BD`) and **Multimodal Image Search** via zero-permission Android Photo Picker (`PickVisualMedia`).
+- Structured answers with Definition, Pathophysiology, Assessment, Medical & Nursing Management, Interventions & Rationales, Complications, Prevention, Patient Education, Nursing Notes, Citations, and Save/Copy/Share actions.
 
-### 2. AI Nursing Assistant & Care Plans
-- **AI Nursing Care Plan Generator** referencing NANDA-I, NIC, and NOC educational frameworks.
-- **Smart AI Tools**: AI Nursing Tutor, Case Study Explainer, Bilingual Medical Term Translator (`EN ↔ বাংলা`), Note Summarizer, AI MCQ Generator, AI Viva Practice, Assignment Assistant, and Clinical Scenario Practice.
-- **Visual Medical Learning**: Pre-bundled educational diagrams for Cardiac Anatomy, Respiratory System, and Peripheral IV Cannulation.
-- *(Note: Live Gemini model calls in AI Studio Android apps require Firebase AI Logic; without Firebase provisioned, `NursingAiRepository` serves locally grounded references and clearly labeled sample outputs.)*
+### 2. Tools (`টুলস`) — Clinical Calculators, AI & Study Suite
+- **12 Clinical Calculators**: IV Flow Rate, IV Drip Time, Medication Dosage, Pediatric Dose, BMI, BSA, 24h I&O Fluid Balance, GCS, APGAR, Temperature & Weight Converters, and Vitals & SBAR Reference.
+- **Care Plan & Smart AI Tools**: Live Gemini-powered NANDA-I / NIC / NOC Care Plan Generator, 8 Smart AI Tools (Tutor, Case Explainer, EN↔বাংলা Translator, Summarizer, MCQ Generator, Viva Practice, Assignment Helper, Ward Scenario), and Visual Anatomy Diagrams.
+- **Drug & Pharmacology Database**, **12 Nursing Procedures**, and **MCQ & Spaced-Repetition Flashcards**.
 
-### 3. Nursing Study Hub & Clinical Library
-- **Student Zone**: Personal Study Dashboard, Daily Study Goal, Study Streak, Weak Topic Detection, Interactive MCQs, and Spaced-Repetition Flashcards.
-- **Notes & Q&A**: 17 nursing subjects covering Notes, Textbooks/WHO guides, Short/Broad Q&A, Viva, Case Studies, Assignments, Care Plans, NANDA-I Diagnoses, and Clinical Definitions.
-- **Drug & Pharmacology Database**: Searchable monographs with generic/brand names, class, MOA, dosage, route, contraindications, side effects, ADRs, nursing responsibilities, interactions, counseling, storage, High-Alert flags, and source verification dates.
-- **Nursing Procedure Library**: 12 core procedures (Hand Washing, Vital Signs, Injections, IV Cannulation, Catheterization, Wound Dressing, Oxygen Therapy, Suctioning, NG Tube Care, Bed Making, CPR/BLS, 10 Rights of Medication) with supervision notices.
+### 3. Files (`ফাইলস`) — Nursing File Vault & Study Library
+- **Personal File Vault**: Upload and organize unlimited PDFs, documents, assignments, lecture notes, and study photos into folders via zero-permission Android Storage Access Framework (`OpenDocument`) and `PickVisualMedia`. Open, share, search, and manage files offline.
+- **Notes & Books Library**: Pre-bundled study notes, textbooks, Short/Broad Q&A, Viva guides, Case Studies, and NANDA-I Care Plans across 17 nursing subjects.
 
-### 4. Clinical Nursing Tools & Calculators
-- **IV Flow Rate (`mL/hr` & `gtt/min`)** & **IV Drip Completion Time**
-- **Medication Dosage** & **Pediatric Weight-Based Dose Support** (with safety cap & double-check warnings)
-- **BMI**, **BSA (Mosteller)**, **24h Intake & Output Fluid Balance**
-- **Glasgow Coma Scale (GCS)** & **APGAR Score**
-- **Temperature (`°C ↔ °F ↔ K`)** & **Weight (`kg ↔ lb`)** Converters
-- **Vital Signs Reference** & **SBAR Clinical Handover Template**
-
-### 5. Profile, Career Zone & Admin Portal
-- Language switcher (`English` / `বাংলা`) and Theme switcher (`Light` / `Dark` / `System`).
-- Offline downloaded content search and saved AI answers.
-- **Career & Licensing Zone**: BNMC, NCLEX-RN, UK NMC prep, govt/private job guides, scholarships, and an interactive **Nursing CV & Resume Builder**.
-- **Admin Portal** (Demo PIN: `2026`): Manage Knowledge Sources, Drug Monographs, QA Feedback, and Reviewer Audit Logs.
+### 4. Profile (`প্রোফাইল`) — Student Profile, Notes & Saved Questions
+- **Student Profile**: Custom **Student Profile Picture** (Photo Picker), **Full Name**, **Gmail**, **Phone Number**, **Nursing College/Hospital**, **Batch/Year**, and Role (`Student` / `Nurse` / `Educator`).
+- **My Notes**: Create, tag, edit, search, copy, and delete personal nursing study notes stored in Room.
+- **Saved Questions**: Bookmark and revisit favorite Q&As, expand full formatted answers, or reopen them directly in Search.
+- **Career & Admin**: BNMC/NCLEX/UK NMC guides, Nursing CV Builder, Language & Theme toggles (`Light`/`Dark`/`System`), and Reviewer Admin Portal (Demo PIN: `2026`).
 
 ---
 
 ## Tech Stack
 - **Language:** Kotlin
 - **UI:** Jetpack Compose, Material Design 3, Adaptive `NavigationBar` / `NavigationRail`, Edge-to-Edge (`WindowInsets`)
+- **AI Engine:** Firebase AI Logic (`gemini-3.8-flash`) + Firebase App Check (Debug & reCAPTCHA Enterprise) with Structured JSON (`Schema.obj`), Streaming, and Multimodal Vision + Room Offline RAG Fallback
 - **Architecture:** MVVM + Repository Pattern (`ViewModel`, `StateFlow`, Coroutines & Flow)
 - **Local Persistence:** Room Database (KSP) + Jetpack DataStore Preferences
 - **Media:** Coil Compose + Android Photo Picker

@@ -2,8 +2,10 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ai.GeminiNursingAiRepository
 import com.example.data.ai.LocalGroundedAiRepository
 import com.example.data.ai.NursingAiRepository
 import com.example.data.ai.NursingAiResponse
@@ -23,11 +25,14 @@ import com.example.data.local.db.DrugEntity
 import com.example.data.local.db.KnowledgeDocEntity
 import com.example.data.local.db.McqQuestionEntity
 import com.example.data.local.db.NursingDatabase
+import com.example.data.local.db.PersonalNoteEntity
 import com.example.data.local.db.ProcedureEntity
 import com.example.data.local.db.SavedAnswerEntity
 import com.example.data.local.db.SearchHistoryEntity
 import com.example.data.local.db.StudyItemEntity
+import com.example.data.local.db.UserFileEntity
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,6 +43,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class ChatErrorState(
+    val query: String,
+    val message: String
+)
+
 sealed interface AiGenerationState {
     data object Idle : AiGenerationState
     data object Loading : AiGenerationState
@@ -45,13 +55,16 @@ sealed interface AiGenerationState {
     data class Error(val message: String) : AiGenerationState
 }
 
+private const val VM_TAG = "NursingViewModel"
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class NursingViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = NursingDatabase.getInstance(application)
     private val repository = NursingRepository(database)
     private val prefsRepo = UserPreferencesRepository(application)
-    private val aiRepository: NursingAiRepository = LocalGroundedAiRepository(database)
+    private val aiRepository: NursingAiRepository = GeminiNursingAiRepository(application)
+    private val offlineFallbackRepository: NursingAiRepository = LocalGroundedAiRepository(database)
 
     val preferences: StateFlow<UserPreferences> = prefsRepo.preferencesFlow.stateIn(
         scope = viewModelScope,
@@ -86,6 +99,12 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
     val auditLogs: StateFlow<List<AuditLogEntity>> = repository.auditLogsFlow.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
     )
+    val personalNotes: StateFlow<List<PersonalNoteEntity>> = repository.personalNotesFlow.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+    )
+    val userFiles: StateFlow<List<UserFileEntity>> = repository.userFilesFlow.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+    )
 
     private val _activeThreadId = MutableStateFlow<String?>(null)
     val activeThreadId: StateFlow<String?> = _activeThreadId.asStateFlow()
@@ -98,6 +117,12 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isChatGenerating = MutableStateFlow(false)
     val isChatGenerating: StateFlow<Boolean> = _isChatGenerating.asStateFlow()
+
+    private val _streamingStatus = MutableStateFlow<String?>(null)
+    val streamingStatus: StateFlow<String?> = _streamingStatus.asStateFlow()
+
+    private val _chatError = MutableStateFlow<ChatErrorState?>(null)
+    val chatError: StateFlow<ChatErrorState?> = _chatError.asStateFlow()
 
     private val _attachedImageUri = MutableStateFlow<Uri?>(null)
     val attachedImageUri: StateFlow<Uri?> = _attachedImageUri.asStateFlow()
@@ -119,8 +144,71 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { prefsRepo.setThemeMode(mode) }
     }
 
-    fun updateUserProfile(name: String, role: UserRole) {
-        viewModelScope.launch { prefsRepo.setUserProfile(name, role) }
+    fun updateUserProfile(
+        name: String,
+        email: String,
+        phone: String,
+        institution: String,
+        studentBatch: String,
+        role: UserRole
+    ) {
+        viewModelScope.launch {
+            prefsRepo.setUserProfile(name, email, phone, institution, studentBatch, role)
+        }
+    }
+
+    fun updateProfilePhoto(uri: Uri?) {
+        viewModelScope.launch {
+            prefsRepo.setProfilePhotoUri(uri?.toString().orEmpty())
+        }
+    }
+
+    fun addOrUpdateNote(id: String? = null, title: String, content: String, tag: String = "Nursing Note") {
+        if (title.isBlank() && content.isBlank()) return
+        viewModelScope.launch {
+            repository.upsertPersonalNote(
+                PersonalNoteEntity(
+                    id = id ?: UUID.randomUUID().toString(),
+                    title = title.trim().ifBlank { "Untitled Note" },
+                    content = content.trim(),
+                    tag = tag.trim().ifBlank { "Nursing Note" },
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun deleteNote(id: String) {
+        viewModelScope.launch { repository.deletePersonalNote(id) }
+    }
+
+    fun addUserFile(
+        title: String,
+        folder: String,
+        uriString: String,
+        mimeType: String,
+        sizeBytes: Long,
+        notes: String = ""
+    ) {
+        if (uriString.isBlank()) return
+        viewModelScope.launch {
+            repository.upsertUserFile(
+                UserFileEntity(
+                    id = UUID.randomUUID().toString(),
+                    title = title.trim().ifBlank { "Nursing File" },
+                    folder = folder.trim().ifBlank { "Study Files" },
+                    uriString = uriString,
+                    mimeType = mimeType.ifBlank { "*/*" },
+                    sizeBytes = sizeBytes,
+                    notes = notes.trim(),
+                    addedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun deleteUserFile(id: String) {
+        viewModelScope.launch { repository.deleteUserFile(id) }
     }
 
     fun setDailyGoal(goal: Int) {
@@ -134,10 +222,13 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
     fun startNewChat() {
         _activeThreadId.value = null
         _attachedImageUri.value = null
+        _chatError.value = null
+        _streamingStatus.value = null
     }
 
     fun selectThread(threadId: String) {
         _activeThreadId.value = threadId
+        _chatError.value = null
     }
 
     fun deleteThread(threadId: String) {
@@ -153,7 +244,16 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.clearSearchHistory() }
     }
 
-    fun sendChatQuery(rawQuery: String) {
+    fun dismissChatError() {
+        _chatError.value = null
+    }
+
+    fun retryLastChatError(useOfflineFallback: Boolean = false) {
+        val error = _chatError.value ?: return
+        sendChatQuery(error.query, useOfflineFallback = useOfflineFallback)
+    }
+
+    fun sendChatQuery(rawQuery: String, useOfflineFallback: Boolean = false) {
         val query = rawQuery.trim()
         val imageUri = _attachedImageUri.value
         if (query.isBlank() && imageUri == null) return
@@ -163,6 +263,8 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             _isChatGenerating.value = true
+            _chatError.value = null
+            _streamingStatus.value = null
             try {
                 val threadId = _activeThreadId.value ?: UUID.randomUUID().toString().also { newId ->
                     repository.upsertThread(
@@ -176,24 +278,31 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val existingHistory = repository.getMessagesOnce(threadId)
-                repository.recordSearch(effectiveQuery, "Nursing AI")
+                val lastMsg = existingHistory.lastOrNull()
+                val isRetryingSameTurn = lastMsg?.role == "user" && lastMsg.content == effectiveQuery
 
-                repository.insertMessage(
-                    ChatMessageEntity(
-                        id = UUID.randomUUID().toString(),
-                        threadId = threadId,
-                        role = "user",
-                        content = effectiveQuery,
-                        imageUri = imageUri?.toString()
+                if (!isRetryingSameTurn) {
+                    repository.recordSearch(effectiveQuery, "Nursing AI")
+                    repository.insertMessage(
+                        ChatMessageEntity(
+                            id = UUID.randomUUID().toString(),
+                            threadId = threadId,
+                            role = "user",
+                            content = effectiveQuery,
+                            imageUri = imageUri?.toString()
+                        )
                     )
-                )
+                }
                 _attachedImageUri.value = null
 
-                val aiResponse = aiRepository.askNursingQuestion(
+                val engine = if (useOfflineFallback) offlineFallbackRepository else aiRepository
+                val aiResponse = engine.askNursingQuestion(
                     query = effectiveQuery,
-                    history = existingHistory,
+                    history = existingHistory.filterNot { isRetryingSameTurn && it.id == lastMsg?.id },
                     language = lang,
-                    attachedImageLabel = imageUri?.lastPathSegment
+                    attachedImageLabel = imageUri?.lastPathSegment,
+                    attachedImageUri = imageUri,
+                    onStreamingUpdate = { preview -> _streamingStatus.value = preview }
                 )
 
                 repository.insertMessage(
@@ -205,15 +314,25 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
                         sectionsSerialized = serializeSections(aiResponse.sections),
                         citationsSerialized = serializeCitations(aiResponse.citations),
                         relatedTopicsSerialized = aiResponse.relatedTopics.joinToString("||TOPIC||"),
-                        emergencyWarning = aiResponse.emergencyWarning
+                        emergencyWarning = aiResponse.emergencyWarning,
+                        isSampleNoticeShown = !aiResponse.isLiveGemini
                     )
                 )
 
                 val threadTitle = existingHistory.firstOrNull { it.role == "user" }?.content?.take(48)
                     ?: effectiveQuery.take(48)
                 repository.updateThreadMeta(threadId, threadTitle, System.currentTimeMillis())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(VM_TAG, "Chat query failed: $effectiveQuery", e)
+                _chatError.value = ChatErrorState(
+                    query = effectiveQuery,
+                    message = e.localizedMessage ?: "Failed to generate nursing answer."
+                )
             } finally {
                 _isChatGenerating.value = false
+                _streamingStatus.value = null
             }
         }
     }
@@ -245,7 +364,7 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deleteSavedAnswer(id) }
     }
 
-    fun generateCarePlan(patientCase: String) {
+    fun generateCarePlan(patientCase: String, useOfflineFallback: Boolean = false) {
         if (patientCase.isBlank()) {
             _assistantState.value = AiGenerationState.Error("Please enter patient case details first.")
             return
@@ -253,24 +372,32 @@ class NursingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _assistantState.value = AiGenerationState.Loading
             try {
-                val res = aiRepository.generateCarePlan(patientCase.trim(), preferences.value.language)
+                val engine = if (useOfflineFallback) offlineFallbackRepository else aiRepository
+                val res = engine.generateCarePlan(patientCase.trim(), preferences.value.language)
                 _assistantState.value = AiGenerationState.Success(res)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                Log.e(VM_TAG, "Care plan generation failed", e)
                 _assistantState.value = AiGenerationState.Error(e.localizedMessage ?: "Failed to generate care plan.")
             }
         }
     }
 
-    fun runSmartTool(toolType: SmartAiToolType, input: String) {
+    fun runSmartTool(toolType: SmartAiToolType, input: String, useOfflineFallback: Boolean = false) {
         val query = input.trim().ifBlank {
             if (preferences.value.language == AppLanguage.BENGALI) toolType.samplePromptBn else toolType.samplePromptEn
         }
         viewModelScope.launch {
             _assistantState.value = AiGenerationState.Loading
             try {
-                val res = aiRepository.runSmartTool(toolType, query, preferences.value.language)
+                val engine = if (useOfflineFallback) offlineFallbackRepository else aiRepository
+                val res = engine.runSmartTool(toolType, query, preferences.value.language)
                 _assistantState.value = AiGenerationState.Success(res)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                Log.e(VM_TAG, "Smart tool execution failed", e)
                 _assistantState.value = AiGenerationState.Error(e.localizedMessage ?: "Smart tool failed.")
             }
         }

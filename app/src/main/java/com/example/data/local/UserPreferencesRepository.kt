@@ -15,8 +15,13 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 data class UserPreferences(
     val language: AppLanguage = AppLanguage.ENGLISH,
-    val themeMode: ThemeMode = ThemeMode.LIGHT,
-    val userName: String = "Nurse Scholar",
+    val themeMode: ThemeMode = ThemeMode.DARK,
+    val userName: String = "Nursing Student",
+    val email: String = "",
+    val phoneNumber: String = "",
+    val institution: String = "",
+    val studentBatch: String = "B.Sc. / Diploma in Nursing",
+    val profilePhotoUri: String = "",
     val userRole: UserRole = UserRole.STUDENT,
     val dailyGoalQuestions: Int = 10,
     val completedTodayQuestions: Int = 3,
@@ -30,6 +35,11 @@ class UserPreferencesRepository(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("language")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val USER_NAME = stringPreferencesKey("user_name")
+        val EMAIL = stringPreferencesKey("email")
+        val PHONE_NUMBER = stringPreferencesKey("phone_number")
+        val INSTITUTION = stringPreferencesKey("institution")
+        val STUDENT_BATCH = stringPreferencesKey("student_batch")
+        val PROFILE_PHOTO_URI = stringPreferencesKey("profile_photo_uri")
         val USER_ROLE = stringPreferencesKey("user_role")
         val DAILY_GOAL = intPreferencesKey("daily_goal_questions")
         val COMPLETED_TODAY = intPreferencesKey("completed_today_questions")
@@ -40,8 +50,13 @@ class UserPreferencesRepository(private val context: Context) {
     val preferencesFlow: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         UserPreferences(
             language = AppLanguage.entries.firstOrNull { it.code == prefs[Keys.LANGUAGE] } ?: AppLanguage.ENGLISH,
-            themeMode = ThemeMode.entries.firstOrNull { it.key == prefs[Keys.THEME_MODE] } ?: ThemeMode.LIGHT,
-            userName = prefs[Keys.USER_NAME] ?: "Nurse Scholar",
+            themeMode = ThemeMode.entries.firstOrNull { it.key == prefs[Keys.THEME_MODE] } ?: ThemeMode.DARK,
+            userName = prefs[Keys.USER_NAME] ?: "Nursing Student",
+            email = prefs[Keys.EMAIL] ?: "",
+            phoneNumber = prefs[Keys.PHONE_NUMBER] ?: "",
+            institution = prefs[Keys.INSTITUTION] ?: "",
+            studentBatch = prefs[Keys.STUDENT_BATCH] ?: "B.Sc. / Diploma in Nursing",
+            profilePhotoUri = prefs[Keys.PROFILE_PHOTO_URI] ?: "",
             userRole = UserRole.entries.firstOrNull { it.key == prefs[Keys.USER_ROLE] } ?: UserRole.STUDENT,
             dailyGoalQuestions = prefs[Keys.DAILY_GOAL] ?: 10,
             completedTodayQuestions = prefs[Keys.COMPLETED_TODAY] ?: 3,
@@ -58,11 +73,26 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.THEME_MODE] = mode.key }
     }
 
-    suspend fun setUserProfile(name: String, role: UserRole) {
+    suspend fun setUserProfile(
+        name: String,
+        email: String,
+        phone: String,
+        institution: String,
+        studentBatch: String,
+        role: UserRole
+    ) {
         context.dataStore.edit {
-            it[Keys.USER_NAME] = name.ifBlank { "Nurse Scholar" }
+            it[Keys.USER_NAME] = name.ifBlank { "Nursing Student" }
+            it[Keys.EMAIL] = email.trim()
+            it[Keys.PHONE_NUMBER] = phone.trim()
+            it[Keys.INSTITUTION] = institution.trim()
+            it[Keys.STUDENT_BATCH] = studentBatch.trim()
             it[Keys.USER_ROLE] = role.key
         }
+    }
+
+    suspend fun setProfilePhotoUri(uri: String) {
+        context.dataStore.edit { it[Keys.PROFILE_PHOTO_URI] = uri }
     }
 
     suspend fun setDailyGoal(goal: Int) {

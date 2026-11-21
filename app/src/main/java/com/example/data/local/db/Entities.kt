@@ -199,3 +199,24 @@ data class AuditLogEntity(
     val notes: String,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "personal_notes")
+data class PersonalNoteEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val content: String,
+    val tag: String = "Nursing Note",
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "user_files")
+data class UserFileEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val folder: String = "Study Files",
+    val uriString: String,
+    val mimeType: String = "*/*",
+    val sizeBytes: Long = 0L,
+    val notes: String = "",
+    val addedAt: Long = System.currentTimeMillis()
+)

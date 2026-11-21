@@ -1,5 +1,6 @@
 package com.example.data.ai
 
+import android.net.Uri
 import com.example.data.local.AppLanguage
 import com.example.data.local.db.ChatMessageEntity
 
@@ -21,7 +22,8 @@ data class NursingAiResponse(
     val citations: List<NursingCitation>,
     val relatedTopics: List<String>,
     val emergencyWarning: String = "",
-    val firebaseNotice: String
+    val firebaseNotice: String,
+    val isLiveGemini: Boolean = false
 )
 
 enum class SmartAiToolType(
@@ -112,7 +114,9 @@ interface NursingAiRepository {
         query: String,
         history: List<ChatMessageEntity>,
         language: AppLanguage,
-        attachedImageLabel: String? = null
+        attachedImageLabel: String? = null,
+        attachedImageUri: Uri? = null,
+        onStreamingUpdate: ((String) -> Unit)? = null
     ): NursingAiResponse
 
     suspend fun generateCarePlan(

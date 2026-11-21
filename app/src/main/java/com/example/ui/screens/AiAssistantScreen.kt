@@ -198,7 +198,11 @@ fun AiAssistantScreen(
                         }
                     }
                     item {
-                        AiOutputResultSection(state = aiState, language = lang)
+                        AiOutputResultSection(
+                            state = aiState,
+                            language = lang,
+                            onUseOfflineFallback = { viewModel.generateCarePlan(carePlanInput, useOfflineFallback = true) }
+                        )
                     }
                 }
 
@@ -258,7 +262,11 @@ fun AiAssistantScreen(
                         }
                     }
                     item {
-                        AiOutputResultSection(state = aiState, language = lang)
+                        AiOutputResultSection(
+                            state = aiState,
+                            language = lang,
+                            onUseOfflineFallback = { viewModel.runSmartTool(selectedTool, smartToolInput, useOfflineFallback = true) }
+                        )
                     }
                 }
 
@@ -315,7 +323,11 @@ fun AiAssistantScreen(
 }
 
 @Composable
-private fun AiOutputResultSection(state: AiGenerationState, language: AppLanguage) {
+private fun AiOutputResultSection(
+    state: AiGenerationState,
+    language: AppLanguage,
+    onUseOfflineFallback: () -> Unit
+) {
     when (state) {
         AiGenerationState.Idle -> Unit
         AiGenerationState.Loading -> {
@@ -326,16 +338,20 @@ private fun AiOutputResultSection(state: AiGenerationState, language: AppLanguag
             ) {
                 CircularProgressIndicator()
                 Spacer(Modifier.width(12.dp))
-                Text(bi(language, "Preparing structured nursing output...", "নার্সিং ফলাফল তৈরি হচ্ছে..."))
+                Text(bi(language, "Generating live Gemini nursing output...", "লাইভ Gemini নার্সিং ফলাফল তৈরি হচ্ছে..."))
             }
         }
         is AiGenerationState.Error -> {
             Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
-                Text(
-                    text = state.message,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(14.dp)
-                )
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = state.message,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    androidx.compose.material3.TextButton(onClick = onUseOfflineFallback) {
+                        Text(bi(language, "Use Offline Template", "অফলাইন টেমপ্লেট দেখুন"))
+                    }
+                }
             }
         }
         is AiGenerationState.Success -> {

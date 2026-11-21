@@ -7,13 +7,16 @@ import com.example.data.local.db.DrugAndProcedureSeedData
 import com.example.data.local.db.DrugEntity
 import com.example.data.local.db.KnowledgeDocEntity
 import com.example.data.local.db.KnowledgeSeedData
+import com.example.data.local.db.KnowledgeSeedDataExtra
 import com.example.data.local.db.McqQuestionEntity
 import com.example.data.local.db.NursingDatabase
+import com.example.data.local.db.PersonalNoteEntity
 import com.example.data.local.db.ProcedureEntity
 import com.example.data.local.db.SavedAnswerEntity
 import com.example.data.local.db.SearchHistoryEntity
 import com.example.data.local.db.StudyAndMcqSeedData
 import com.example.data.local.db.StudyItemEntity
+import com.example.data.local.db.UserFileEntity
 import kotlinx.coroutines.flow.Flow
 
 class NursingRepository(private val db: NursingDatabase) {
@@ -27,27 +30,50 @@ class NursingRepository(private val db: NursingDatabase) {
     val studyItemsFlow: Flow<List<StudyItemEntity>> = db.studyItemDao().observeAll()
     val mcqsFlow: Flow<List<McqQuestionEntity>> = db.mcqDao().observeAll()
     val auditLogsFlow: Flow<List<AuditLogEntity>> = db.auditLogDao().observeAll()
+    val personalNotesFlow: Flow<List<PersonalNoteEntity>> = db.personalNoteDao().observeAll()
+    val userFilesFlow: Flow<List<UserFileEntity>> = db.userFileDao().observeAll()
 
     fun observeMessages(threadId: String): Flow<List<ChatMessageEntity>> =
         db.chatDao().observeMessages(threadId)
 
     suspend fun ensureSeeded() {
-        if (db.knowledgeDocDao().getAllOnce().isEmpty()) {
-            db.knowledgeDocDao().insertAll(KnowledgeSeedData.initialKnowledgeDocs())
+        val existingDocIds = db.knowledgeDocDao().getAllOnce().map { it.id }.toSet()
+        val allDocs = KnowledgeSeedData.initialKnowledgeDocs() + KnowledgeSeedDataExtra.extraKnowledgeDocs()
+        val missingDocs = allDocs.filter { it.id !in existingDocIds }
+        if (missingDocs.isNotEmpty()) {
+            db.knowledgeDocDao().insertAll(missingDocs)
         }
-        if (db.drugDao().getAllOnce().isEmpty()) {
-            db.drugDao().insertAll(DrugAndProcedureSeedData.initialDrugs())
+
+        val existingDrugIds = db.drugDao().getAllOnce().map { it.id }.toSet()
+        val missingDrugs = DrugAndProcedureSeedData.initialDrugs().filter { it.id !in existingDrugIds }
+        if (missingDrugs.isNotEmpty()) {
+            db.drugDao().insertAll(missingDrugs)
         }
-        if (db.procedureDao().getAllOnce().isEmpty()) {
-            db.procedureDao().insertAll(DrugAndProcedureSeedData.initialProcedures())
+
+        val existingProcIds = db.procedureDao().getAllOnce().map { it.id }.toSet()
+        val missingProcs = DrugAndProcedureSeedData.initialProcedures().filter { it.id !in existingProcIds }
+        if (missingProcs.isNotEmpty()) {
+            db.procedureDao().insertAll(missingProcs)
         }
-        if (db.studyItemDao().getAllOnce().isEmpty()) {
-            db.studyItemDao().insertAll(StudyAndMcqSeedData.initialStudyItems())
+
+        val existingStudyIds = db.studyItemDao().getAllOnce().map { it.id }.toSet()
+        val missingStudy = StudyAndMcqSeedData.initialStudyItems().filter { it.id !in existingStudyIds }
+        if (missingStudy.isNotEmpty()) {
+            db.studyItemDao().insertAll(missingStudy)
         }
-        if (db.mcqDao().getAllOnce().isEmpty()) {
-            db.mcqDao().insertAll(StudyAndMcqSeedData.initialMcqs())
+
+        val existingMcqIds = db.mcqDao().getAllOnce().map { it.id }.toSet()
+        val missingMcqs = StudyAndMcqSeedData.initialMcqs().filter { it.id !in existingMcqIds }
+        if (missingMcqs.isNotEmpty()) {
+            db.mcqDao().insertAll(missingMcqs)
         }
     }
+
+    suspend fun upsertPersonalNote(note: PersonalNoteEntity) = db.personalNoteDao().upsert(note)
+    suspend fun deletePersonalNote(id: String) = db.personalNoteDao().deleteById(id)
+
+    suspend fun upsertUserFile(file: UserFileEntity) = db.userFileDao().upsert(file)
+    suspend fun deleteUserFile(id: String) = db.userFileDao().deleteById(id)
 
     suspend fun upsertThread(thread: ChatThreadEntity) = db.chatDao().upsertThread(thread)
     suspend fun insertMessage(message: ChatMessageEntity) = db.chatDao().insertMessage(message)

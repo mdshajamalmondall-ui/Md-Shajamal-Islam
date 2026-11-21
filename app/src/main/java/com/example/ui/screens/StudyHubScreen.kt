@@ -146,7 +146,7 @@ fun StudyHubScreen(
 }
 
 @Composable
-private fun StudentZoneTab(
+internal fun StudentZoneTab(
     lang: AppLanguage,
     mcqs: List<McqQuestionEntity>,
     completedToday: Int,
@@ -323,7 +323,7 @@ private fun StudentZoneTab(
 }
 
 @Composable
-private fun NotesAndResourcesTab(
+internal fun NotesAndResourcesTab(
     lang: AppLanguage,
     items: List<StudyItemEntity>,
     onToggleBookmark: (StudyItemEntity) -> Unit,
@@ -404,7 +404,7 @@ private fun NotesAndResourcesTab(
 }
 
 @Composable
-private fun DrugDatabaseTab(
+internal fun DrugDatabaseTab(
     lang: AppLanguage,
     drugs: List<DrugEntity>,
     onToggleOffline: (DrugEntity) -> Unit
@@ -508,7 +508,7 @@ private fun DrugDetailLine(label: String, value: String) {
 }
 
 @Composable
-private fun ProceduresTab(
+internal fun ProceduresTab(
     lang: AppLanguage,
     procedures: List<ProcedureEntity>,
     onToggleOffline: (ProcedureEntity) -> Unit
